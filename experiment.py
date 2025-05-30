@@ -6,13 +6,13 @@ from conversation import run_llm_conversation
 
 
 # 실험 세팅
-MODEL_PAIRS = [['gpt', 'gpt'], ['gpt', 'deepseek'], ['deepseek', 'deepseek']]
+MODEL_PAIRS = [['gpt', 'deepseek'], ['gpt', 'gpt'], ['deepseek', 'deepseek']]
 # Memo: GPT-DeepSeek 대화에서 dialog count가 1일 때, GPT만 1번 답변을 하고 DeepSeek은 답변을 하지 않게 됨.
 DIALOGUE_COUNTS = [4]  # [1, 2, 4, 8, 16]
 PROBLEM_FILES = {
+    "ps": "problems/ps.json",
     "math": "problems/math.json",
     "writing": "problems/writing.json",
-    "ps": "problems/ps.json"
 }
 
 with open('api_key.json', 'r', encoding='utf-8') as f:

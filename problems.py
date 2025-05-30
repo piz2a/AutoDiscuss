@@ -2,6 +2,10 @@
 # Grading AI-generated solutions using the criteria
 
 import json
+import re
+import subprocess
+import sys
+import tempfile
 
 
 def load_exam_problems(path: str) -> dict:
@@ -61,12 +65,65 @@ def create_prompt_from_problem(problem: dict) -> str:
     return prompt
 
 
-def grading_exam_problems(exam_problems):
+def grade_exam_problem(exam_problem):
     ...
 
 
-def grading_ps_problems(ps_problems):
-    ...
+def grade_ps_problem(ps_problem, ai_answer_text):
+    try:
+        code = extract_python_code(ai_answer_text)
+    except ValueError as e:
+        print(f"Parsing error: {e}")
+        return 0.0
+
+    test_cases = ps_problem.get('testCases', [])
+    total_cases = len(test_cases)
+    correct_cases = 0
+
+    for i, test_case in enumerate(test_cases):
+        input_data = test_case['input']
+        expected_output = test_case['output'].strip()
+
+        actual_output = run_python_code(code, input_data).strip()
+
+        print(f"Test {i+1}:")
+        print(f"Input:\n{input_data}")
+        print(f"Expected Output:\n{expected_output}")
+        print(f"Actual Output:\n{actual_output}\n")
+
+        if actual_output == expected_output:
+            correct_cases += 1
+
+    score_percentage = (correct_cases / total_cases) * 100 if total_cases > 0 else 0.0
+    return score_percentage
+
+def extract_python_code(answer_text: str) -> str:
+    pattern = r"```python\s*(.*?)\s*```"
+    match = re.search(pattern, answer_text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    else:
+        raise ValueError("No Python code block found in the answer.")
+
+def run_python_code(code: str, input_str: str, timeout: float = 2.0) -> str:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tmp_file:
+        tmp_file.write(code)
+        tmp_filename = tmp_file.name
+
+    try:
+        result = subprocess.run(
+            [sys.executable, tmp_filename],
+            input=input_str.encode('utf-8'),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout
+        )
+        output = result.stdout.decode('utf-8').strip()
+        return output
+    except subprocess.TimeoutExpired:
+        return "TIMEOUT"
+    except Exception as e:
+        return f"ERROR: {str(e)}"
 
 
 if __name__ == '__main__':
