@@ -63,8 +63,8 @@ class LLMAPI:
         end = time.time()
         return {
             "response_text": response.choices[0].message.content,
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
+            "input_tokens": response.usage.prompt_tokens,
+            "output_tokens": response.usage.completion_tokens,
             "duration": end - start
         }
 

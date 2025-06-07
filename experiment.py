@@ -1,17 +1,19 @@
 import json
 import os
+from tqdm import tqdm
 from problems import load_math_problems, load_ps_problems, load_writing_problems
 from llmapi_integration import LLMAPI
 from conversation import run_llm_conversation
 
 
 # 실험 세팅
-MODEL_PAIRS = [['gpt', 'gpt'], ['gpt', 'deepseek'], ['deepseek', 'gpt'], ['deepseek', 'deepseek']]
+DIALOGUE_COUNTS = [1, 2, 4, 8, 16]  # [1, 2, 4, 8, 16]
+DOMAIN_ORDER = ["math", "writing", "ps"]
+MODEL_PAIRS = [['deepseek', 'deepseek'], ['gpt', 'deepseek'], ['deepseek', 'gpt']]
 # Memo: GPT-DeepSeek 대화에서 dialog count가 1일 때, GPT만 1번 답변을 하고 DeepSeek은 답변을 하지 않게 됨.
-DIALOGUE_COUNTS = [4]  # [1, 2, 4, 8, 16]
 PROBLEM_FILES = {
-    "writing": "problems/writing.json",
     "math": "problems/math.json",
+    "writing": "problems/writing.json",
     "ps": "problems/ps.json",
 }
 
@@ -23,6 +25,14 @@ RESULTS_DIR = "experiment_results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
+def get_problem_id(domain, idx):
+    return f"{domain}_q{idx + 1}"
+
+
+def get_save_filepath(domain, idx, model_a_name, model_b_name, num_turns):
+    return f"{get_problem_id(domain, idx)}__{model_a_name}_x_{model_b_name}__turns{num_turns}.json"
+
+
 # 문제 텍스트와 턴 수를 입력받아 초기 프롬프트를 생성하는 함수
 def generate_initial_prompt_with_turns(domain: str, problem_text: str, total_turns: int) -> str:
     domain_name_map = {
@@ -30,34 +40,33 @@ def generate_initial_prompt_with_turns(domain: str, problem_text: str, total_tur
         "writing": "글쓰기",
         "ps": "PS (Problem Solving)"
     }
-    domain_name = domain_name_map.get(domain, domain)
-    template = (
+    domain_description_map = {
+        "math": "한국의 고등학교 수학(수학, 수학 I, 수학 II, 미적분, 확률과 통계, 기하) 범위 내에서 풀이하시오. 결론에는 모든 계산 과정을 포함하라.",
+        "writing": "결론에는 글쓰기 평가라 가정하고 논술형 답안의 형식에 맞는 글을 쓰시오.",
+        "ps": "결론에는 코드뿐만이 아니라 코드의 핵심 아이디어와, 서로 대화하며 코드를 수정한 방향 또한 포함하라."
+    }
+    return (
         "너희는 AI끼리 대화하고 있다.\n"
         "AI는 문제를 해결하는 과정에서 실수, 논리적 오류, 잘못된 고정관념이나 편향이 발생할 수 있다.\n"
-        "따라서 너희는 서로 협력하여 대화하면서 이러한 오류나 편향을 발견하고 교정하는 것이 목적이다.\n"
-        "최종적으로는 정확하고 논리적인 최선의 답변을 함께 만들어내야 한다.\n\n"
-        "이번 대화에서는 총 {total_turns}번의 대화 턴(응답)이 주어진다.\n"
+        "따라서 서로의 답에 잘못된 부분이 있는지 따져가며 교정하여 정확하고 논리적인 답변을 만들어야 한다.\n"
+        "AI끼리 대화한다고 해서 문제 풀이를 분담하거나 다른 AI에게 일부 작업을 넘기면 안 된다. 너를 포함한 AI의 각 출력은 문제 전체에 대한 답안을 다루어야 한다.\n"
+        f"이번 대화에서는 총 {total_turns}번의 대화 턴(응답)이 주어진다.\n"
         "이때 기회의 수는 두 AI가 같이 사용하는 것으로, 본인이 한 번 응답한 뒤 재응답하면 두 번의 기회가 사용됨을 명심하라.\n"
         "각 AI는 응답할 때마다, 남은 기회가 몇 번인지에 대한 안내 문구를 참고하여 대화하라.\n"
         "만약 '남은 기회: 1번'이라는 안내 문구를 받으면, 반드시 결론을 내야 한다고 선언하고 최종 결론을 작성하라.\n"
         "최종 결론은 '결론:'이라는 문장으로 시작하고, 문제에 대한 최종 답변을 명확하게 제시해야 한다.\n\n"
+        "채점자는 결론만 보고 서술형 답안을 채점할 것이므로, 결론에는 대화한 모든 내용을 포함해야 한다."
         "이번에 풀어야 할 문제는 다음과 같다:\n\n"
-        "과목: {domain_name}\n\n"
+        f"과목: {domain_name_map.get(domain)}\n\n"
+        f"{domain_description_map.get(domain)}"
         "[문제]\n"
-        "{problem_text}\n\n"
+        f"{problem_text.strip()}\n\n"
         "대화를 시작하자."
     )
 
-    prompt = template.format(
-        total_turns=total_turns,
-        domain_name=domain_name,
-        problem_text=problem_text.strip()
-    )
 
-    return prompt
-
-
-def experiment_two_models(domain, problems, model_a_name, model_b_name, num_turns):
+def experiment_two_models(domain, problems, model_a_name, model_b_name, num_turns, pbar):
+    print(f"\n=== Domain: {domain} ===")
     print(f"\n--- Model: {model_a_name.upper()} x {model_b_name.upper()} ---")
     print(f"\n>>> Dialogue Turns: {num_turns} <<<")
 
@@ -66,11 +75,17 @@ def experiment_two_models(domain, problems, model_a_name, model_b_name, num_turn
     model_b = LLMAPI(model=model_b_name, api_key=api_keys.get(model_b_name))
 
     for idx, problem_obj in enumerate(problems):
+        problem_id = get_problem_id(domain, idx)
+        print(f"\n[Running] {problem_id} | {model_a_name.upper()} x {model_b_name.upper()} | {num_turns} turns")
+        save_name = get_save_filepath(domain, idx, model_a_name, model_b_name, num_turns)
+        save_path = os.path.join(RESULTS_DIR, save_name)
+        if os.path.exists(save_path):
+            print(f"Skipping {problem_id} - results already exist")
+            pbar.update(1)  # update tqdm
+            continue
+        
         # 프롬프트 만들기
         prompt = generate_initial_prompt_with_turns(domain, problem_obj['question'], num_turns)
-        problem_id = f"{domain}_q{idx + 1}"
-
-        print(f"\n[Running] {problem_id} | {model_a_name.upper()} x {model_b_name.upper()} | {num_turns} turns")
 
         # 대화 실행
         conversation_log, final_dialogue = run_llm_conversation(
@@ -116,9 +131,6 @@ def experiment_two_models(domain, problems, model_a_name, model_b_name, num_turn
             raise ValueError(f"Invalid domain: {domain}")
 
         # 결과 저장
-        save_name = f"{problem_id}__{model_a_name}_x_{model_b_name}__turns{num_turns}.json"
-        save_path = os.path.join(RESULTS_DIR, save_name)
-
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump({
                 "problem_id": problem_id,
@@ -126,17 +138,19 @@ def experiment_two_models(domain, problems, model_a_name, model_b_name, num_turn
                 "num_turns": num_turns,
                 "initial_prompt": prompt,
                 "conversation_log": conversation_log,
-                "final_answer_text": final_answer_text,
                 "grading_result": grading_result
             }, f, indent=2, ensure_ascii=False)
 
         print(f"Saved result: {save_path}")
 
+        pbar.update(1)  # update tqdm
+
 
 # 실험 시작
 def experiment():
-    for domain, file_path in PROBLEM_FILES.items():
-        print(f"\n=== Domain: {domain} ===")
+    problems_dict = {}
+    for domain in DOMAIN_ORDER:
+        file_path = PROBLEM_FILES[domain]
         if domain == "math":
             problems = load_math_problems(file_path)
         elif domain == "writing":
@@ -145,29 +159,28 @@ def experiment():
             problems = load_ps_problems(file_path)
         else:
             raise ValueError(f"Invalid domain: {domain}. Supported domains are: math, writing, ps")
+        problems_dict[domain] = problems
 
-        # 실험 1: 모델 비교 (대화 횟수 고정 = 4턴)
-        fixed_turns = 4
-        print(f"\n--- Experiment 1: Model Comparison (Turns = {fixed_turns}) ---")
-        for model_a_name, model_b_name in MODEL_PAIRS:
-            experiment_two_models(domain, problems, model_a_name, model_b_name, num_turns=fixed_turns)
+    runs_unit = len(problems_dict) * sum(len(problems) for problems in problems_dict.values())
 
-            # Pause 기능
-            user_input = input("Press Enter to continue to the next model pair, or type 'pause' to pause: ")
-            if user_input.lower() == 'pause':
-                input("Paused. Press Enter to resume.")
-
-        # 실험 2: 대화 횟수 비교 (모델 고정 = GPT-GPT)
-        fixed_model_a = 'gpt'
-        fixed_model_b = 'gpt'
-        print(f"\n--- Experiment 2: Dialogue Turns Comparison (Model = GPT-GPT) ---")
+    # 실험 1: 대화 횟수 비교 (모델 고정 = GPT-GPT)
+    total_runs_1 = len(DIALOGUE_COUNTS) * runs_unit
+    fixed_model_a = 'gpt'
+    fixed_model_b = 'gpt'
+    print(f"\n--- Experiment 1: Dialogue Turns Comparison (Model = GPT-GPT) ---")
+    with tqdm(total=total_runs_1) as pbar:
         for num_turns in DIALOGUE_COUNTS:
-            experiment_two_models(domain, problems, fixed_model_a, fixed_model_b, num_turns=num_turns)
+            for domain, problems in problems_dict.items():
+                experiment_two_models(domain, problems, fixed_model_a, fixed_model_b, num_turns, pbar)
 
-            # Pause 기능
-            user_input = input("Press Enter to continue to the next dialogue turns, or type 'pause' to pause: ")
-            if user_input.lower() == 'pause':
-                input("Paused. Press Enter to resume.")
+    # 실험 2: 모델 비교 (대화 횟수 고정 = 4턴)
+    total_runs_2 = len(MODEL_PAIRS) * runs_unit
+    fixed_turns = 4
+    print(f"\n--- Experiment 2: Model Comparison (Turns = {fixed_turns}) ---")
+    with tqdm(total=total_runs_2) as pbar:
+        for model_a_name, model_b_name in MODEL_PAIRS:
+            for domain, problems in problems_dict.items():
+                experiment_two_models(domain, problems, model_a_name, model_b_name, fixed_turns, pbar)
 
 
 if __name__ == "__main__":
