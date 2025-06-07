@@ -1,4 +1,5 @@
 # Running a conversation between two LLMs
+from ipykernel.eventloops import loop_qt
 
 from llmapi_integration import LLMAPI
 
@@ -24,6 +25,8 @@ def run_llm_conversation(model_a: LLMAPI, model_b: LLMAPI, initial_prompt: str, 
         output_tokens = result["output_tokens"]
         duration = result["duration"]
 
+        print(f"[Turn {turn + 1}/{num_turns}]", end=" ")
+
         # Log this turn
         conversation_log.append({
             "turn": turn + 1,
@@ -44,5 +47,6 @@ def run_llm_conversation(model_a: LLMAPI, model_b: LLMAPI, initial_prompt: str, 
         # Alternate speaker
         current_speaker = model_b if current_speaker == model_a else model_a
 
+    print()
     # After N turns, return the full conversation log
     return conversation_log, dialogue

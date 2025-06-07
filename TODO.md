@@ -7,51 +7,65 @@
 - LLM끼리 대화하여 문제 해결 성능 분석
 - 정확도, 비용, 시간 측정 및 비교
 - GPT / DeepSeek 모델별 비교 분석
+- 대화 횟수에 따른 성능 변화 분석
+- 안정적이고 재현 가능한 실험 프레임워크 구축
 
 ---
 
 ## 📌 현재 진행률 (Progress)
 
-**진행률**: 약 **60%**  
-**구조 설계**는 거의 완료, **주요 구현(채점/통계)** 단계 진입
+**진행률**: 약 **80%**  
+**구조 설계 및 주요 구현 완료**  
+**통계/시각화 단계 진입 중**
 
 ---
 
 ## 🗂️ 할 일 (To-Do List)
 
-### 1️⃣ grade_ps_problem 완성 및 디버깅 ✅
+### 🧩 핵심 기능
 
-- [ ] 함수 안정화 (파싱 + 실행 + 채점 확인)
-- [ ] 실제 PS 문제 테스트 케이스 적용
-
----
-
-### 2️⃣ grade_exam_problem 구현 📝
-
-- [X] GPT로 재채점 구조 설계
-- [X] criteria 기반 점수 계산
-- [X] 테스트 Exam 문제 적용
+- [X] grade_math_problem 통합
+- [X] grade_writing_problem 통합
+- [X] grade_ps_problem 통합
+- [X] Grader reply 저장 기능 구현
+- [X] DeepSeek token 처리 대응 (prompt_tokens, completion_tokens)
+- [ ] experiment() → 대화횟수 비교를 최우선으로 변경
 
 ---
 
-### 3️⃣ experiment() 수정 → 채점 통합
-
-- [X] PS 문제는 grade_ps_problem 사용
-- [X] Exam 문제는 grade_exam_problem 사용
-- [X] 대화 결론 파싱 + 채점 결과 저장
-
----
-
-### 4️⃣ 정확도 / 비용 / 시간 측정 기능 추가
+### 📊 정확도 / 비용 / 시간 측정
 
 - [X] 정확도 저장
-- [ ] 비용 계산 (tokens * API 요금)
-- [ ] 시간 측정 (start ~ end)
+- [X] 비용 계산 (tokens * API 요금)
+- [X] 시간 측정 (start ~ end)
+- [X] 결과 JSON 통합 저장
 
 ---
 
-### 5️⃣ 결과 시각화
+### 📝 테스트/유닛 테스트 도입
 
-- [ ] 표 출력
+- [ ] PyTest 구조 도입 (grade 함수 등 테스트)
+- [ ] 실험 코드 검증 자동화
+
+---
+
+### 🕹️ 실험 UX 개선
+
+- [X] experiment() pause/resume 기능 구현
+- [ ] 실험 진행률 표시 (진행률 % 출력)
+
+---
+
+### 📈 결과 시각화
+
+- [ ] 표 출력 (모델/문제 분야/turn 별 성능)
 - [ ] 그래프 출력 (모델/문제 분야/turn 별)
-- [ ] 프로토타입 웹서비스 개발 (발표 도중 모두가 들어가서 사용해볼 수 있게)
+- [ ] 프로토타입 웹서비스 개발 (실험 결과 시각화)
+
+---
+
+## 🚀 향후 고도화 아이디어
+
+- [ ] Grader 모델 다양화 (GPT-4o / Claude / DeepSeek 등 비교)
+- [ ] Chat prompt engineering (domain-specific tuning)
+- [ ] 실험 자동화 스크립트 (all experiments batch 실행)

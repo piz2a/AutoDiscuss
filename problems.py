@@ -37,7 +37,7 @@ def load_ps_problems(path: str) -> list:
     for problem in json_list:
         ps_problems.append({
             'question': create_prompt_from_ps_problem(problem),
-            'test_cases': problem.get('test')
+            'test_cases': problem.get('testCases')
         })
     return ps_problems
 
@@ -227,8 +227,9 @@ def grade_ps_problem(ps_problem, ai_answer_text):
         print(f"Parsing error: {e}")
         return 0.0, ""
 
-    test_cases = ps_problem.get('testCases', [])
+    test_cases = ps_problem.get('test_cases', [])
     total_cases = len(test_cases)
+    print(total_cases)
     correct_cases = 0
 
     for i, test_case in enumerate(test_cases):
