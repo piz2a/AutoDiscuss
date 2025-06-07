@@ -28,7 +28,6 @@ class LLMAPI:
         for i, utterance in enumerate(dialogue):
             role = 'assistant' if i % 2 == len(dialogue) % 2 else 'user'
             messages.append({"role": role, "content": utterance})
-        print(messages)
 
         # Call the API and return the response
         if self.model == 'gpt':
@@ -48,7 +47,8 @@ class LLMAPI:
         end = time.time()
         return {
             "response_text": response.output[0].content[0].text,
-            "tokens": response.usage.total_tokens,
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
             "duration": end - start
         }
 
@@ -63,7 +63,8 @@ class LLMAPI:
         end = time.time()
         return {
             "response_text": response.choices[0].message.content,
-            "tokens": response.usage.total_tokens,
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
             "duration": end - start
         }
 

@@ -20,7 +20,8 @@ def run_llm_conversation(model_a: LLMAPI, model_b: LLMAPI, initial_prompt: str, 
 
         # Extract response text and metadata
         response_text = result["response_text"]
-        tokens = result["tokens"]
+        input_tokens = result["input_tokens"]
+        output_tokens = result["output_tokens"]
         duration = result["duration"]
 
         # Log this turn
@@ -28,7 +29,8 @@ def run_llm_conversation(model_a: LLMAPI, model_b: LLMAPI, initial_prompt: str, 
             "turn": turn + 1,
             "model": current_speaker.model,
             "response_text": response_text,
-            "total_tokens": tokens,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "duration": duration
         })
 

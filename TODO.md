@@ -28,23 +28,23 @@
 
 ### 2️⃣ grade_exam_problem 구현 📝
 
-- [ ] GPT로 재채점 구조 설계
-- [ ] criteria 기반 점수 계산
-- [ ] 테스트 Exam 문제 적용
+- [X] GPT로 재채점 구조 설계
+- [X] criteria 기반 점수 계산
+- [X] 테스트 Exam 문제 적용
 
 ---
 
 ### 3️⃣ experiment() 수정 → 채점 통합
 
-- [ ] PS 문제는 grade_ps_problem 사용
-- [ ] Exam 문제는 grade_exam_problem 사용
-- [ ] 대화 결론 파싱 + 채점 결과 저장
+- [X] PS 문제는 grade_ps_problem 사용
+- [X] Exam 문제는 grade_exam_problem 사용
+- [X] 대화 결론 파싱 + 채점 결과 저장
 
 ---
 
 ### 4️⃣ 정확도 / 비용 / 시간 측정 기능 추가
 
-- [ ] 정확도 저장
+- [X] 정확도 저장
 - [ ] 비용 계산 (tokens * API 요금)
 - [ ] 시간 측정 (start ~ end)
 
@@ -54,4 +54,4 @@
 
 - [ ] 표 출력
 - [ ] 그래프 출력 (모델/문제 분야/turn 별)
-
+- [ ] 프로토타입 웹서비스 개발 (발표 도중 모두가 들어가서 사용해볼 수 있게)
