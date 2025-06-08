@@ -7,20 +7,18 @@ from tqdm import tqdm
 
 # experiment_results 디렉토리
 RESULTS_DIR = "experiment_results"
-PLOTS_DIR = "plots"
-os.makedirs(PLOTS_DIR, exist_ok=True)
 
 # GPT-4.1 기준 요금
 PRICE_PER_INPUT_TOKEN = 2.00 / 1_000_000  # $2.00 per 1M input tokens
 PRICE_PER_OUTPUT_TOKEN = 8.00 / 1_000_000  # $8.00 per 1M output tokens
 
 # 결과 파일 읽기
-def load_results():
+def load_results(dir_name="experiment_results"):
     data = []
-    result_files = [f for f in os.listdir(RESULTS_DIR) if f.endswith(".json")]
+    result_files = [f for f in os.listdir(dir_name) if f.endswith(".json")]
 
-    for file_name in tqdm(result_files, desc="Loading results"):
-        file_path = os.path.join(RESULTS_DIR, file_name)
+    for file_name in tqdm(result_files, desc=f"Loading results from {dir_name}"):
+        file_path = os.path.join(dir_name, file_name)
         with open(file_path, 'r', encoding='utf-8') as f:
             result = json.load(f)
 
@@ -53,8 +51,7 @@ def load_results():
     df = pd.DataFrame(data)
     return df
 
-# 시각화 함수
-def plot_all_results(df):
+def plot_all_results(df, plots_dir="plots"):
     # Experiment 1만 필터링 (GPT-GPT)
     df_exp1 = df[df["model_pair"] == "gpt_x_gpt"].copy()
     # x축 순서 명시 (1, 2, 4, 8)
@@ -82,7 +79,7 @@ def plot_all_results(df):
     plt.ylabel("Score (Accuracy)")
     plt.legend(title="Domain")
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOTS_DIR, "score_vs_num_turns.png"))
+    plt.savefig(os.path.join(plots_dir, "score_vs_num_turns.png"))
     plt.close()
 
     ### Plot 2: Cost vs Num Turns (boxplot)
@@ -93,7 +90,7 @@ def plot_all_results(df):
     plt.ylabel("Cost (USD)")
     plt.legend(title="Domain")
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOTS_DIR, "cost_vs_num_turns.png"))
+    plt.savefig(os.path.join(plots_dir, "cost_vs_num_turns.png"))
     plt.close()
 
     ### Plot 3: Elapsed Time vs Num Turns (boxplot)
@@ -104,14 +101,13 @@ def plot_all_results(df):
     plt.ylabel("Elapsed Time (sec)")
     plt.legend(title="Domain")
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOTS_DIR, "elapsed_time_vs_num_turns.png"))
+    plt.savefig(os.path.join(plots_dir, "elapsed_time_vs_num_turns.png"))
     plt.close()
 
-    print(f"Plots saved to: {PLOTS_DIR}")
+    print(f"Plots saved to: {plots_dir}")
 
 
-# 시각화 함수
-def plot_model_comparison(df):
+def plot_model_comparison(df, plots_dir="plots"):
     # 실험 2 조건: num_turns == 4
     df_exp2 = df[df["num_turns"] == 4]
 
@@ -134,7 +130,7 @@ def plot_model_comparison(df):
     plt.xlabel("Model Pair")
     plt.ylabel("Score (Accuracy)")
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOTS_DIR, "score_vs_model_pair.png"))
+    plt.savefig(os.path.join(plots_dir, "score_vs_model_pair.png"))
     plt.close()
 
     ### Plot 2: Cost vs Model Pair (domain별 swarmplot)
@@ -144,7 +140,7 @@ def plot_model_comparison(df):
     plt.xlabel("Model Pair")
     plt.ylabel("Cost (USD)")
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOTS_DIR, "cost_vs_model_pair.png"))
+    plt.savefig(os.path.join(plots_dir, "cost_vs_model_pair.png"))
     plt.close()
 
     ### Plot 3: Elapsed Time vs Model Pair (domain별 swarmplot)
@@ -154,14 +150,24 @@ def plot_model_comparison(df):
     plt.xlabel("Model Pair")
     plt.ylabel("Elapsed Time (sec)")
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOTS_DIR, "elapsed_time_vs_model_pair.png"))
+    plt.savefig(os.path.join(plots_dir, "elapsed_time_vs_model_pair.png"))
     plt.close()
 
-    print(f"Plots saved to: {PLOTS_DIR}")
+    print(f"Plots saved to: {plots_dir}")
 
 
 # 실행 예시
 if __name__ == "__main__":
-    df = load_results()
-    plot_all_results(df)
-    plot_model_comparison(df)
+    # Experiment 1
+    plots_dir_1 = "plots"
+    os.makedirs(plots_dir_1, exist_ok=True)
+    df = load_results(dir_name="experiment_results")
+    plot_all_results(df, plots_dir="plots")
+    plot_model_comparison(df, plots_dir="plots")
+
+    # Experiment 2
+    plots_dir_2 = "plots_2"
+    os.makedirs(plots_dir_2, exist_ok=True)
+    df2 = load_results(dir_name="experiment_2_results")
+    plot_all_results(df2, plots_dir=plots_dir_2)
+    plot_model_comparison(df2, plots_dir=plots_dir_2)

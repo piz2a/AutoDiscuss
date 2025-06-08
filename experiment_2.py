@@ -18,13 +18,13 @@ PROBLEM_FILES = {
     "writing": "problems/writing.json",
     "ps": "problems/ps.json",
 }
-MAX_WORKERS = 10
+MAX_WORKERS = 1
 
 with open('api_key.json', 'r', encoding='utf-8') as f:
     api_keys = json.load(f)
 
 # 결과 저장 경로
-RESULTS_DIR = "experiment_results"
+RESULTS_DIR = "experiment_2_results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
@@ -37,7 +37,7 @@ def get_save_filepath(domain, idx, model_a_name, model_b_name, num_turns):
 
 
 # 문제 텍스트와 턴 수를 입력받아 초기 프롬프트를 생성하는 함수
-def generate_initial_prompt_with_turns(domain: str, problem_text: str, total_turns: int) -> str:
+def generate_initial_prompt_with_turns(domain: str, problem_text: str, total_turns: int, alt = False) -> str:
     domain_name_map = {
         "math": "수학",
         "writing": "글쓰기",
@@ -45,26 +45,26 @@ def generate_initial_prompt_with_turns(domain: str, problem_text: str, total_tur
     }
     domain_description_map = {
         "math": "한국의 고등학교 수학(수학, 수학 I, 수학 II, 미적분, 확률과 통계, 기하) 범위 내에서 풀이하시오. 결론에는 모든 계산 과정을 포함하라.",
-        "writing": "결론에는 글쓰기 평가라 가정하고 논술형 답안의 형식에 맞는 글을 쓰시오.",
-        "ps": "결론에는 코드뿐만이 아니라 코드의 핵심 아이디어와, 서로 대화하며 코드를 수정한 방향 또한 포함하라."
+        "writing": "글쓰기 평가라 가정하고 논술형 답안의 형식에 맞는 글을 쓰시오.",
+        "ps": "코드뿐만이 아니라 코드의 핵심 아이디어와, 서로 대화하며 코드를 수정한 방향 또한 포함하라."
     }
-    return (
-        "너희는 AI끼리 대화하고 있다.\n"
-        "AI는 문제를 해결하는 과정에서 실수, 논리적 오류, 잘못된 고정관념이나 편향이 발생할 수 있다.\n"
-        "따라서 서로의 답에 잘못된 부분이 있는지 따져가며 교정하여 정확하고 논리적인 답변을 만들어야 한다.\n"
-        "AI끼리 대화한다고 해서 문제 풀이를 분담하거나 다른 AI에게 일부 작업을 넘기면 안 된다. 너를 포함한 AI의 각 출력은 문제 전체에 대한 답안을 다루어야 한다.\n"
-        f"이번 대화에서는 총 {total_turns}번의 대화 턴(응답)이 주어진다.\n"
-        "이때 기회의 수는 두 AI가 같이 사용하는 것으로, 본인이 한 번 응답한 뒤 재응답하면 두 번의 기회가 사용됨을 명심하라.\n"
-        "각 AI는 응답할 때마다, 남은 기회가 몇 번인지에 대한 안내 문구를 참고하여 대화하라.\n"
-        "만약 '남은 기회: 1번'이라는 안내 문구를 받으면, 반드시 결론을 내야 한다고 선언하고 최종 결론을 작성하라.\n"
-        "최종 결론은 '결론:'이라는 문장으로 시작하고, 문제에 대한 최종 답변을 명확하게 제시해야 한다.\n\n"
-        "채점자는 결론만 보고 서술형 답안을 채점할 것이므로, 결론에는 대화한 모든 내용을 포함해야 한다."
+    base_prompt = (
         "이번에 풀어야 할 문제는 다음과 같다:\n\n"
         f"과목: {domain_name_map.get(domain)}\n\n"
         f"{domain_description_map.get(domain)}"
         "[문제]\n"
-        f"{problem_text.strip()}\n\n"
-        "대화를 시작하자."
+        f"{problem_text.strip()}"
+    )
+    return base_prompt if alt else (
+        "너희는 AI끼리 대화하고 있다.\n"
+        "AI는 문제를 해결하는 과정에서 실수, 논리적 오류, 잘못된 고정관념이나 편향이 발생할 수 있다.\n"
+        "따라서 서로의 답에 잘못된 부분이 있는지 따져가며 교정하여 정확하고 논리적인 답변을 만들어야 한다.\n"
+        "지금까지 진행된 대화를 참고하여, 오류가 있다면 이를 수정하고 부족한 부분을 보완하여 문제에 대한 최종적인 답변을 작성하라.\n"
+        "이번 차례에서 너는 지금까지 다른 AI와 한 대화를 마무리 지으며 최종적인 답변을 작성해야 한다.\n"
+        "결론을 미루거나 다음 차례에 넘기지 말고, 이번 응답에서 반드시 문제 전체를 고려한 완전한 최종 답변을 작성하라.\n"
+        "최종 결론은 '결론:'이라는 문장으로 시작하고, 문제에 대한 최종 답변을 명확하게 제시해야 한다.\n\n"
+        f"{base_prompt}"
+        "\n\n대화를 시작하자."
     )
 
 
@@ -81,17 +81,21 @@ def experiment_one_problem(domain, problem_obj, idx, model_a_name, model_b_name,
     model_a = LLMAPI(model=model_a_name, api_key=api_keys.get(model_a_name))
     model_b = LLMAPI(model=model_b_name, api_key=api_keys.get(model_b_name))
 
+    print("Hello?1")
     # 프롬프트 만들기
     prompt = generate_initial_prompt_with_turns(domain, problem_obj['question'], num_turns)
+    alt_prompt = generate_initial_prompt_with_turns(domain, problem_obj['question'], num_turns, alt=True)
 
+    print("Hello?2")
     # 대화 실행
     conversation_log, final_dialogue = run_llm_conversation(
         model_a,
         model_b,
         initial_prompt=prompt,
         num_turns=num_turns,
-        append_turn_annotation=False
+        alt_init_prompt=alt_prompt
     )
+    print("Hello?3")
     print(*final_dialogue)
 
     # 최종 결론 텍스트 (final_dialogue의 마지막 발화 내용 전체 사용)
@@ -143,9 +147,9 @@ def experiment_one_problem(domain, problem_obj, idx, model_a_name, model_b_name,
 
 
 def experiment_two_models(futures, domain, problems, model_a_name, model_b_name, num_turns, pbar, executor):
-    print(f"\n=== Domain: {domain} ===")
-    print(f"\n--- Model: {model_a_name.upper()} x {model_b_name.upper()} ---")
-    print(f"\n>>> Dialogue Turns: {num_turns} <<<")
+    print(f"=== Domain: {domain} ===")
+    print(f"--- Model: {model_a_name.upper()} x {model_b_name.upper()} ---")
+    print(f">>> Dialogue Turns: {num_turns} <<<")
 
     for idx, problem_obj in enumerate(problems):
         futures.append(
@@ -194,6 +198,7 @@ def experiment():
                     pbar.update(1)
     except (RateLimitError, KeyboardInterrupt) as e:
         print(e)
+        raise e
 
     # 실험 2: 모델 비교 (대화 횟수 고정 = 4턴)
     total_runs_2 = len(MODEL_PAIRS) * runs_unit

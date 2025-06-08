@@ -108,11 +108,34 @@ df["slice_count"] = pd.Categorical(df["slice_count"], categories=[1, 2, 3, 4], o
 
 # 박스플롯
 plt.figure(figsize=(6, 6))
-sns.lineplot(data=df, x="slice_count", y="score", hue="problem_id", marker="o", legend=False)
+sns.lineplot(data=df, x="slice_count", y="score", hue="problem_id", marker="o", legend=True)
 plt.xticks([1, 2, 3, 4])
+plt.legend()
 plt.title("Score vs Slice Count Analysis (GPTxGPT, 4 turns)")
 plt.xlabel("Slice Count (Turns used)")
 plt.ylabel("Score")
+plt.ylim(-0.05, 1.05)
 plt.tight_layout()
 plt.savefig("plots/issue_analysis_boxplot.png")
+plt.show()
+
+
+## 비교를 위해 단일 GPT의 성능도 그래프로 나타냄
+
+# DataFrame 생성
+with open(os.path.join('issues', 'single_pass_gpt.json'), 'r') as f:
+    issue_results = json.load(f)
+df = pd.DataFrame(issue_results)
+df["slice_count"] = pd.Categorical(df["slice_count"], categories=[1], ordered=True)
+
+# 박스플롯
+plt.figure(figsize=(2, 6))
+sns.lineplot(data=df, x="slice_count", y="score", hue="problem_id", marker="o", legend=False)
+plt.xticks([1])
+plt.title(" ")
+plt.xlabel("Single-pass GPT")
+plt.ylabel("Score")
+plt.ylim(-0.05, 1.05)
+plt.tight_layout()
+plt.savefig("plots/issue_analysis_single_pass_gpt_boxplot.png")
 plt.show()
