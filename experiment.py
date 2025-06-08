@@ -1,13 +1,15 @@
 import json
 import os
+from openai import RateLimitError
 from tqdm import tqdm
 from problems import load_math_problems, load_ps_problems, load_writing_problems
 from llmapi_integration import LLMAPI
 from conversation import run_llm_conversation
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # 실험 세팅
-DIALOGUE_COUNTS = [1, 2, 4, 8, 16]  # [1, 2, 4, 8, 16]
+DIALOGUE_COUNTS = [1, 2, 4, 8]  # [1, 2, 4, 8, 16]
 DOMAIN_ORDER = ["math", "writing", "ps"]
 MODEL_PAIRS = [['deepseek', 'deepseek'], ['gpt', 'deepseek'], ['deepseek', 'gpt']]
 # Memo: GPT-DeepSeek 대화에서 dialog count가 1일 때, GPT만 1번 답변을 하고 DeepSeek은 답변을 하지 않게 됨.
@@ -16,6 +18,7 @@ PROBLEM_FILES = {
     "writing": "problems/writing.json",
     "ps": "problems/ps.json",
 }
+MAX_WORKERS = 10
 
 with open('api_key.json', 'r', encoding='utf-8') as f:
     api_keys = json.load(f)
@@ -65,85 +68,96 @@ def generate_initial_prompt_with_turns(domain: str, problem_text: str, total_tur
     )
 
 
-def experiment_two_models(domain, problems, model_a_name, model_b_name, num_turns, pbar):
-    print(f"\n=== Domain: {domain} ===")
-    print(f"\n--- Model: {model_a_name.upper()} x {model_b_name.upper()} ---")
-    print(f"\n>>> Dialogue Turns: {num_turns} <<<")
+def experiment_one_problem(domain, problem_obj, idx, model_a_name, model_b_name, num_turns):
+    problem_id = get_problem_id(domain, idx)
+    print(f"\n[Running] {problem_id} | {model_a_name.upper()} x {model_b_name.upper()} | {num_turns} turns")
+    save_name = get_save_filepath(domain, idx, model_a_name, model_b_name, num_turns)
+    save_path = os.path.join(RESULTS_DIR, save_name)
+    if os.path.exists(save_path):
+        print(f"Skipping {problem_id} - results already exist")
+        return
 
     # 모델 초기화
     model_a = LLMAPI(model=model_a_name, api_key=api_keys.get(model_a_name))
     model_b = LLMAPI(model=model_b_name, api_key=api_keys.get(model_b_name))
 
+    # 프롬프트 만들기
+    prompt = generate_initial_prompt_with_turns(domain, problem_obj['question'], num_turns)
+
+    # 대화 실행
+    conversation_log, final_dialogue = run_llm_conversation(
+        model_a,
+        model_b,
+        initial_prompt=prompt,
+        num_turns=num_turns
+    )
+    print(*final_dialogue)
+
+    # 최종 결론 텍스트 (final_dialogue의 마지막 발화 내용 전체 사용)
+    final_answer_text = final_dialogue[-1].strip()
+
+    # 채점
+    grader = LLMAPI(model='gpt', api_key=api_keys.get('gpt'))  # 채점용 LLM 고정
+
+    if domain == "math":
+        from problems import grade_math_problem
+        score, grader_reply = grade_math_problem(problem_obj, final_answer_text, grader)
+        grading_result = {
+            "grader_reply": grader_reply,
+            "score": score  # 0.0 ~ 1.0
+            # Grader 출력은 grade_math_problem 내부에서 이미 print() 되므로 여기서는 별도 저장 X
+        }
+
+    elif domain == "writing":
+        from problems import grade_writing_problem
+        score, grader_reply = grade_writing_problem(problem_obj, final_answer_text, grader)
+        grading_result = {
+            "grader_reply": grader_reply,
+            "score": score
+        }
+
+    elif domain == "ps":
+        from problems import grade_ps_problem
+        score, grader_reply = grade_ps_problem(problem_obj, final_answer_text)
+        grading_result = {
+            "grader_reply": grader_reply,
+            "score": score
+        }
+
+    else:
+        raise ValueError(f"Invalid domain: {domain}")
+
+    # 결과 저장
+    with open(save_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            "problem_id": problem_id,
+            "model_pair": f"{model_a_name}_x_{model_b_name}",
+            "num_turns": num_turns,
+            "initial_prompt": prompt,
+            "conversation_log": conversation_log,
+            "grading_result": grading_result
+        }, f, indent=2, ensure_ascii=False)
+
+    print(f"Saved result: {save_path}")
+
+
+def experiment_two_models(futures, domain, problems, model_a_name, model_b_name, num_turns, pbar, executor):
+    print(f"\n=== Domain: {domain} ===")
+    print(f"\n--- Model: {model_a_name.upper()} x {model_b_name.upper()} ---")
+    print(f"\n>>> Dialogue Turns: {num_turns} <<<")
+
     for idx, problem_obj in enumerate(problems):
-        problem_id = get_problem_id(domain, idx)
-        print(f"\n[Running] {problem_id} | {model_a_name.upper()} x {model_b_name.upper()} | {num_turns} turns")
-        save_name = get_save_filepath(domain, idx, model_a_name, model_b_name, num_turns)
-        save_path = os.path.join(RESULTS_DIR, save_name)
-        if os.path.exists(save_path):
-            print(f"Skipping {problem_id} - results already exist")
-            pbar.update(1)  # update tqdm
-            continue
-        
-        # 프롬프트 만들기
-        prompt = generate_initial_prompt_with_turns(domain, problem_obj['question'], num_turns)
-
-        # 대화 실행
-        conversation_log, final_dialogue = run_llm_conversation(
-            model_a,
-            model_b,
-            initial_prompt=prompt,
-            num_turns=num_turns
+        futures.append(
+            executor.submit(
+                experiment_one_problem,
+                domain,
+                problem_obj,
+                idx,
+                model_a_name,
+                model_b_name,
+                num_turns
+            )
         )
-        print(*final_dialogue)
-
-        # 최종 결론 텍스트 (final_dialogue의 마지막 발화 내용 전체 사용)
-        final_answer_text = final_dialogue[-1].strip()
-
-        # 채점
-        grader = LLMAPI(model='gpt', api_key=api_keys.get('gpt'))  # 채점용 LLM 고정
-
-        if domain == "math":
-            from problems import grade_math_problem
-            score, grader_reply = grade_math_problem(problem_obj, final_answer_text, grader)
-            grading_result = {
-                "grader_reply": grader_reply,
-                "score": score  # 0.0 ~ 1.0
-                # Grader 출력은 grade_math_problem 내부에서 이미 print() 되므로 여기서는 별도 저장 X
-            }
-
-        elif domain == "writing":
-            from problems import grade_writing_problem
-            score, grader_reply = grade_writing_problem(problem_obj, final_answer_text, grader)
-            grading_result = {
-                "grader_reply": grader_reply,
-                "score": score
-            }
-
-        elif domain == "ps":
-            from problems import grade_ps_problem
-            score, grader_reply = grade_ps_problem(problem_obj, final_answer_text)
-            grading_result = {
-                "grader_reply": grader_reply,
-                "score": score
-            }
-
-        else:
-            raise ValueError(f"Invalid domain: {domain}")
-
-        # 결과 저장
-        with open(save_path, 'w', encoding='utf-8') as f:
-            json.dump({
-                "problem_id": problem_id,
-                "model_pair": f"{model_a_name}_x_{model_b_name}",
-                "num_turns": num_turns,
-                "initial_prompt": prompt,
-                "conversation_log": conversation_log,
-                "grading_result": grading_result
-            }, f, indent=2, ensure_ascii=False)
-
-        print(f"Saved result: {save_path}")
-
-        pbar.update(1)  # update tqdm
 
 
 # 실험 시작
@@ -168,19 +182,30 @@ def experiment():
     fixed_model_a = 'gpt'
     fixed_model_b = 'gpt'
     print(f"\n--- Experiment 1: Dialogue Turns Comparison (Model = GPT-GPT) ---")
-    with tqdm(total=total_runs_1) as pbar:
-        for num_turns in DIALOGUE_COUNTS:
-            for domain, problems in problems_dict.items():
-                experiment_two_models(domain, problems, fixed_model_a, fixed_model_b, num_turns, pbar)
+    try:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = []
+            with tqdm(total=total_runs_1) as pbar:
+                for num_turns in DIALOGUE_COUNTS:
+                    for domain, problems in problems_dict.items():
+                        experiment_two_models(futures, domain, problems, fixed_model_a, fixed_model_b, num_turns, pbar, executor)
+                for _ in as_completed(futures):
+                    pbar.update(1)
+    except (RateLimitError, KeyboardInterrupt) as e:
+        print(e)
 
     # 실험 2: 모델 비교 (대화 횟수 고정 = 4턴)
     total_runs_2 = len(MODEL_PAIRS) * runs_unit
     fixed_turns = 4
     print(f"\n--- Experiment 2: Model Comparison (Turns = {fixed_turns}) ---")
-    with tqdm(total=total_runs_2) as pbar:
-        for model_a_name, model_b_name in MODEL_PAIRS:
-            for domain, problems in problems_dict.items():
-                experiment_two_models(domain, problems, model_a_name, model_b_name, fixed_turns, pbar)
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = []
+        with tqdm(total=total_runs_2) as pbar:
+            for model_a_name, model_b_name in MODEL_PAIRS:
+                for domain, problems in problems_dict.items():
+                    experiment_two_models(futures, domain, problems, model_a_name, model_b_name, fixed_turns, pbar, executor)
+            for _ in as_completed(futures):
+                pbar.update(1)
 
 
 if __name__ == "__main__":
