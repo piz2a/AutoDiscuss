@@ -156,6 +156,42 @@ def plot_model_comparison(df, plots_dir="plots"):
     print(f"Plots saved to: {plots_dir}")
 
 
+def compute_average_scores(df):
+    results = {}
+
+    # Case 1~4: GPT x GPT with num_turns = 1, 2, 4, 8
+    for num_turn in [1, 2, 4, 8]:
+        avg_score = df[
+            (df["model_pair"] == "gpt_x_gpt") &
+            (df["num_turns"] == num_turn)
+        ]["score"].mean()
+
+        results[f"gpt_x_gpt_turns_{num_turn}"] = avg_score
+
+    # Case 5: gpt_x_deepseek with num_turns = 4
+    avg_score = df[
+        (df["model_pair"] == "gpt_x_deepseek") &
+        (df["num_turns"] == 4)
+    ]["score"].mean()
+    results["gpt_x_deepseek_turns_4"] = avg_score
+
+    # Case 6: deepseek_x_gpt with num_turns = 4
+    avg_score = df[
+        (df["model_pair"] == "deepseek_x_gpt") &
+        (df["num_turns"] == 4)
+    ]["score"].mean()
+    results["deepseek_x_gpt_turns_4"] = avg_score
+
+    # Case 7: deepseek_x_deepseek with num_turns = 4
+    avg_score = df[
+        (df["model_pair"] == "deepseek_x_deepseek") &
+        (df["num_turns"] == 4)
+    ]["score"].mean()
+    results["deepseek_x_deepseek_turns_4"] = avg_score
+
+    return results
+
+
 # 실행 예시
 if __name__ == "__main__":
     # Experiment 1
@@ -165,9 +201,19 @@ if __name__ == "__main__":
     plot_all_results(df, plots_dir="plots")
     plot_model_comparison(df, plots_dir="plots")
 
+    avg_scores = compute_average_scores(df)
+    print("1 Average Scores (7 cases):")
+    for k, v in avg_scores.items():
+        print(f"{k}: {v:.4f}")
+
     # Experiment 2
     plots_dir_2 = "plots_2"
     os.makedirs(plots_dir_2, exist_ok=True)
     df2 = load_results(dir_name="experiment_2_results")
     plot_all_results(df2, plots_dir=plots_dir_2)
     plot_model_comparison(df2, plots_dir=plots_dir_2)
+
+    avg_scores = compute_average_scores(df2)
+    print("2 Average Scores (7 cases):")
+    for k, v in avg_scores.items():
+        print(f"{k}: {v:.4f}")
